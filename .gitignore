@@ -1,0 +1,17 @@
+# Credentials and local environment
+.env
+.env.*
+feedback-*.json
+*service_account*.json
+*service-account*.json
+
+# Local exports and browser screenshots may contain patient data
+*.csv
+*.xlsx
+*_timeout.png
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
