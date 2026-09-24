@@ -30,17 +30,10 @@ automatically backfilled. Local Excel tests still produce a single-run workbook.
 3. Enable the Google Sheets and Google Drive APIs in the service account's
    Google Cloud project. Share the target spreadsheet with the key's
    `client_email` as **Editor**.
-4. Open **Actions > Export WebPT visits > Run workflow** for the first run.
+4. Open **Actions > WebPT visits > Run workflow** whenever you want to run it.
    A successful run updates the live spreadsheet.
 
-The workflow runs daily at **04:30 New York time**, including daylight saving
-adjustments, and can also be started manually. It preserves the timezone and
-hour used by the original Python scheduler. To change the time, edit `cron`
-in the workflow. If changing the timezone, also update the `ZoneInfo` values
-in `visits.py` so the report date stays consistent.
-
-GitHub schedules run from the default branch and may be delayed. See
-[GitHub's scheduling documentation](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#onschedule).
+The workflow runs only when you start it manually. There is no automatic schedule.
 
 Each job runs once using headless Chrome on Ubuntu, with a 20-minute timeout.
 Selenium manages the Chrome driver. Runs are serialized to avoid concurrent
@@ -58,6 +51,5 @@ For Google authentication, set `GOOGLE_SERVICE_ACCOUNT_JSON` or
 default for local use. Then run `python visits.py`.
 
 Run `python visits.py --test-excel` for a sample-data Excel smoke test without
-logging into WebPT or modifying Google Sheets. Local runs can use
-`RUN_SCHEDULED=true` to keep the process alive for daily execution; the Actions
-workflow explicitly disables that loop.
+logging into WebPT or modifying Google Sheets. Each local run executes once
+when you start it; there is no built-in scheduling loop.

@@ -2,9 +2,6 @@ name: WebPT visits
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '30 4 * * *'
-      timezone: America/New_York
 
 permissions:
   contents: read
@@ -19,7 +16,6 @@ jobs:
     timeout-minutes: 20
     env:
       HEADLESS: 'true'
-      RUN_SCHEDULED: 'false'
       PYTHONUTF8: '1'
       PYTHONUNBUFFERED: '1'
     steps:

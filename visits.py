@@ -25,7 +25,7 @@ import shutil
 import csv
 import json
 import tempfile
-from datetime import datetime, timedelta
+from datetime import datetime
 import gspread
 from google.oauth2.service_account import Credentials
 from gspread.exceptions import WorksheetNotFound
@@ -1000,30 +1000,6 @@ def main():
     log("📊 Google Sheet history saved successfully")
 
 
-def run_daily_at_0430():
-    """Keep the process alive and run main once daily at 04:30 New York time."""
-    try:
-        from zoneinfo import ZoneInfo
-        schedule_tz = ZoneInfo("America/New_York")
-    except Exception:
-        schedule_tz = None
-
-    while True:
-        now = datetime.now(schedule_tz) if schedule_tz else datetime.now()
-        target = now.replace(hour=4, minute=30, second=0, microsecond=0)
-        if target <= now:
-            target += timedelta(days=1)
-
-        wait_seconds = (target - now).total_seconds()
-        log(f"Next run scheduled for {target.isoformat()} ({wait_seconds / 3600:.2f} hours)")
-        time.sleep(max(wait_seconds, 1))
-
-        try:
-            main()
-        except Exception as exc:
-            log(f"Scheduled run failed: {exc}")
-
-
 if __name__ == "__main__":
     import argparse
 
@@ -1038,7 +1014,5 @@ if __name__ == "__main__":
         parser.error("--input-csv requires --test-excel")
     if args.test_excel:
         test_local_excel(args.test_excel, args.input_csv)
-    elif os.getenv("RUN_SCHEDULED", "false").lower() in {"1", "true", "yes"}:
-        run_daily_at_0430()
     else:
         main()
