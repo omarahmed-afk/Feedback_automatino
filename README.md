@@ -1,15 +1,17 @@
 # WebPT visits automation
 
-`visits.py` exports today's visits from WebPT and appends history to the Google Sheet's
+`visits.py` exports today's visits from WebPT and replaces the Google Sheet's
 `All` and `Initial Examination` tabs. The report date uses America/New_York.
 
-Visits are matched by EMR ID, clinic, patient name, appointment type, and date
-(A:E). Existing visits have only their status in F updated. New visits are
-appended in A:F; column G (Phone), including its header and formatting, is never
-written. Add the Phone header manually on a new tab if desired. Visits on a
-different date get a new row. Empty reports leave
-history intact. History accumulates from subsequent runs; past dates are not
-automatically backfilled. Local Excel tests still produce a single-run workbook.
+Each manual run replaces the previous report with today's visits. Old dates and
+visits missing from the latest report are removed. A valid report with no
+matching visits clears that tab's data rows. Failed downloads leave the report
+unchanged. Tabs refresh when you run the script, not automatically at midnight.
+
+Phone numbers in G are preserved for visits matching EMR ID, clinic, patient
+name, appointment type, and date (A:E). They move with matching visits; removed
+visits' phone cells are cleared. The Phone header and formatting are preserved.
+Add the Phone header manually on a new tab if desired.
 
 ## GitHub Actions setup
 

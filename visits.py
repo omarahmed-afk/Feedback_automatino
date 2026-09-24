@@ -12,7 +12,7 @@ Google setup:
    GOOGLE_SERVICE_ACCOUNT_FILE or GOOGLE_SERVICE_ACCOUNT_JSON.
 
 Set WEBPT_USERNAME and WEBPT_PASSWORD through environment variables.
-Normal runs append history to All and Initial Examination tabs, skipping repeats.
+Normal runs replace All and Initial Examination tabs with today's visits.
 Local Excel test (sample data): py visits.py --test-excel
 Local Excel test (real CSV): py visits.py --test-excel visits_local.xlsx --input-csv export.csv
 Each tab contains: EMR ID | Clinic Name | Patient Name |
@@ -468,7 +468,7 @@ def test_local_excel(output_path, input_csv=None):
 
 
 def _write_google_tab(spreadsheet, tab_name, values):
-    """Append new visits in A:F and update existing statuses, never writing G."""
+    """Replace the report, retaining phone numbers for matching visits."""
     try:
         worksheet = spreadsheet.worksheet(tab_name)
     except WorksheetNotFound:
@@ -480,43 +480,30 @@ def _write_google_tab(spreadsheet, tab_name, values):
 
     existing = worksheet.get("A:G")
     if existing and existing[0][:6] != values[0][:6]:
-        raise RuntimeError(f"Unexpected header in {tab_name}; history was not modified")
+        raise RuntimeError(f"Unexpected header in {tab_name}; report was not modified")
 
-    # A:E identify a visit. F is mutable; G belongs entirely to the user.
+    # Match phone numbers by visit identity so they follow reordered rows.
     def history_key(row):
         return tuple(str(value) for value in (list(row) + [""] * 5)[:5])
 
-    saved_rows = {}
-    for row_number, row in enumerate(existing[1:], start=2):
-        if any(row[:5]):
-            saved_rows.setdefault(history_key(row), []).append((row_number, row))
+    saved_phones = {
+        history_key(row): _cell(row, 6)
+        for row in existing[1:] if _cell(row, 6)
+    }
     incoming = {history_key(row): row[:6] for row in values[1:]}
-    additions = []
-    updates = []
-    for key, row in incoming.items():
-        if key not in saved_rows:
-            additions.append(row)
-        else:
-            for row_number, saved in saved_rows[key]:
-                if _cell(saved, 5) != row[5]:
-                    updates.append({"range": f"F{row_number}", "values": [[row[5]]]})
-
-    pending = additions if existing else [values[0][:6]] + additions
-    start_row = len(existing) + 1
-    required_rows = max(worksheet.row_count, len(existing) + len(pending), 100)
+    report = [row + [saved_phones.get(key, "")] for key, row in incoming.items()]
+    # Explicit blank rows remove stale visits and their phones in the same write.
+    body_rows = max(len(existing) - 1, len(report))
+    pending = report + [[""] * 7 for _ in range(body_rows - len(report))]
+    required_rows = max(worksheet.row_count, body_rows + 1, 100)
     required_cols = max(worksheet.col_count, 7)
     if required_rows != worksheet.row_count or required_cols != worksheet.col_count:
         worksheet.resize(rows=required_rows, cols=required_cols)
 
-    # Write only below existing report rows; never clear historical data.
+    updates = [{"range": "A1:F1", "values": [values[0][:6]]}]
     if pending:
-        worksheet.update(
-            values=pending,
-            range_name=f"A{start_row}:F{start_row + len(pending) - 1}",
-            value_input_option="RAW",
-        )
-    if updates:
-        worksheet.batch_update(updates, value_input_option="RAW")
+        updates.append({"range": f"A2:G{body_rows + 1}", "values": pending})
+    worksheet.batch_update(updates, value_input_option="RAW")
 
     spreadsheet.batch_update({
         "requests": [
@@ -573,11 +560,11 @@ def _write_google_tab(spreadsheet, tab_name, values):
             },
         ]
     })
-    log(f"   ✅ {tab_name}: appended {len(additions)} visits, updated {len(updates)} statuses")
+    log(f"   ✅ {tab_name}: replaced report with {len(report)} visits")
 
 
 def write_google_sheet_tabs(cleaned_rows):
-    """Append history to All and the Initial Examination subset."""
+    """Replace All and Initial Examination with the current report."""
     if GOOGLE_SHEET_ID in ("", "PASTE_GOOGLE_SHEET_ID_HERE"):
         raise RuntimeError("Set GOOGLE_SHEET_ID before running the script")
     if not cleaned_rows:
@@ -989,15 +976,15 @@ def main():
     log("\n── Step 1: Cleaning ──")
     cleaned_rows = deduplicate_rows(all_rows)
 
-    # ── Step 2: Append Google Sheets history ──
-    log("\n── Step 2: Append Google Sheet history ──")
+    # ── Step 2: Replace Google Sheets report ──
+    log("\n── Step 2: Replace Google Sheet report ──")
     report_rows = write_google_sheet_tabs(cleaned_rows)
 
     # ── Step 3: Count patients per clinic (Initial/New Case = 2) ──
     counts = compute_clinic_counts(report_rows)
 
     log("\n✅ ALL DONE!")
-    log("📊 Google Sheet history saved successfully")
+    log("📊 Google Sheet report saved successfully")
 
 
 if __name__ == "__main__":
