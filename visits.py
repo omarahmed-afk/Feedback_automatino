@@ -12,7 +12,8 @@ Google setup:
    GOOGLE_SERVICE_ACCOUNT_FILE or GOOGLE_SERVICE_ACCOUNT_JSON.
 
 Set WEBPT_USERNAME and WEBPT_PASSWORD through environment variables.
-Normal runs replace All and Initial Examination tabs with today's visits.
+Normal runs replace columns A:F in All and Initial Examination with today's visits.
+Columns G onward are left untouched, including phone lookup formulas.
 Local Excel test (sample data): py visits.py --test-excel
 Local Excel test (real CSV): py visits.py --test-excel visits_local.xlsx --input-csv export.csv
 Each tab contains: EMR ID | Clinic Name | Patient Name |
@@ -468,7 +469,7 @@ def test_local_excel(output_path, input_csv=None):
 
 
 def _write_google_tab(spreadsheet, tab_name, values):
-    """Replace the report, retaining phone numbers for matching visits."""
+    """Replace A:F from row 1, preserving formulas and data in G onward."""
     try:
         worksheet = spreadsheet.worksheet(tab_name)
     except WorksheetNotFound:
@@ -478,31 +479,23 @@ def _write_google_tab(spreadsheet, tab_name, values):
             cols=7,
         )
 
-    existing = worksheet.get("A:G")
+    existing = worksheet.get("A:F")
     if existing and existing[0][:6] != values[0][:6]:
         raise RuntimeError(f"Unexpected header in {tab_name}; report was not modified")
 
-    # Match phone numbers by visit identity so they follow reordered rows.
-    def history_key(row):
-        return tuple(str(value) for value in (list(row) + [""] * 5)[:5])
-
-    saved_phones = {
-        history_key(row): _cell(row, 6)
-        for row in existing[1:] if _cell(row, 6)
-    }
-    incoming = {history_key(row): row[:6] for row in values[1:]}
-    report = [row + [saved_phones.get(key, "")] for key, row in incoming.items()]
-    # Explicit blank rows remove stale visits and their phones in the same write.
+    report = [row[:6] for row in values[1:]]
     body_rows = max(len(existing) - 1, len(report))
-    pending = report + [[""] * 7 for _ in range(body_rows - len(report))]
-    required_rows = max(worksheet.row_count, body_rows + 1, 100)
+    # Clear stale report rows only in A:F, without touching phone formulas.
+    pending = report + [[""] * 6 for _ in range(body_rows - len(report))]
+    end_row = body_rows + 1
+    required_rows = max(worksheet.row_count, end_row, 100)
     required_cols = max(worksheet.col_count, 7)
     if required_rows != worksheet.row_count or required_cols != worksheet.col_count:
         worksheet.resize(rows=required_rows, cols=required_cols)
 
     updates = [{"range": "A1:F1", "values": [values[0][:6]]}]
     if pending:
-        updates.append({"range": f"A2:G{body_rows + 1}", "values": pending})
+        updates.append({"range": f"A2:F{end_row}", "values": pending})
     worksheet.batch_update(updates, value_input_option="RAW")
 
     spreadsheet.batch_update({
@@ -560,11 +553,11 @@ def _write_google_tab(spreadsheet, tab_name, values):
             },
         ]
     })
-    log(f"   ✅ {tab_name}: replaced report with {len(report)} visits")
+    log(f"   ✅ {tab_name}: replaced A:F with {len(report)} visits")
 
 
 def write_google_sheet_tabs(cleaned_rows):
-    """Replace All and Initial Examination with the current report."""
+    """Replace All and Initial Examination columns A:F with the current report."""
     if GOOGLE_SHEET_ID in ("", "PASTE_GOOGLE_SHEET_ID_HERE"):
         raise RuntimeError("Set GOOGLE_SHEET_ID before running the script")
     if not cleaned_rows:
@@ -976,8 +969,8 @@ def main():
     log("\n── Step 1: Cleaning ──")
     cleaned_rows = deduplicate_rows(all_rows)
 
-    # ── Step 2: Replace Google Sheets report ──
-    log("\n── Step 2: Replace Google Sheet report ──")
+    # ── Step 2: Replace Google Sheets report columns A:F ──
+    log("\n── Step 2: Replace Google Sheet report columns A:F ──")
     report_rows = write_google_sheet_tabs(cleaned_rows)
 
     # ── Step 3: Count patients per clinic (Initial/New Case = 2) ──
